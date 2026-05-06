@@ -1,0 +1,39 @@
+databases:
+  - name: meteo-postgres
+    databaseName: meteo_db
+    user: meteo_user
+
+services:
+  - type: web
+    name: meteo-backend
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: meteo-postgres
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: meteo-postgres
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: meteo-postgres
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: meteo-postgres
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: meteo-postgres
+          property: password
+      - key: APP_JWT_SECRET
+        generateValue: true
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: https://frontend-eight-beige-14.vercel.app,https://frontend-e3zqbp2f1-aminehssaine33-gmailcoms-projects.vercel.app
+      - key: GROQ_API_KEY
+        sync: false
