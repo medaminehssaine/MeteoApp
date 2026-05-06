@@ -1,0 +1,61 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:meteo_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;NON_KEYWORDS=VALUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+    open-in-view: false
+  flyway:
+    enabled: false
+  cache:
+    type: none
+
+app:
+  jwt:
+    secret: testSecretKeyForJwtSigningAtLeast256BitsLong1234567890
+    access-token-expiration: 3600000
+    refresh-token-expiration: 604800000
+    issuer: meteo-project-test
+  security:
+    max-failed-attempts: 5
+    lock-duration-minutes: 30
+    bcrypt-strength: 4
+  cors:
+    allowed-origins: http://localhost:4200
+
+meteo:
+  thresholds:
+    soleil: 85
+    nuage-clair: 70
+    nuage-charge: 50
+  forcing:
+    blocked-action-days: 5
+    late-actions-pct: 30
+    budget-overrun-pct: 120
+    no-update-days: 10
+  criticality-coefficients:
+    LOW: 0.5
+    MEDIUM: 1.0
+    HIGH: 1.5
+    CRITICAL: 2.0
+  ai:
+    max-history-points: 10
+    min-history-points: 3
+
+management:
+  health:
+    db:
+      enabled: true
+
+ai:
+  groq:
+    base-url: http://localhost
+    model: test
+    api-key: test

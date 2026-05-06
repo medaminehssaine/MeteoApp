@@ -89,6 +89,14 @@ meteo:
       medium-threshold: 45
 
 management:
+  health:
+    db:
+      enabled: true
+    defaults:
+      enabled: true
+  endpoint:
+    health:
+      show-details: always
   endpoints:
     web:
       exposure:
@@ -104,6 +112,7 @@ logging:
   level:
     com.meteoproject: DEBUG
     org.springframework.security: WARN
+    org.springframework.web.filter.CommonsRequestLoggingFilter: DEBUG
 
 # ── AI / Groq (Cloud LLM) ──────────────────
 ai:

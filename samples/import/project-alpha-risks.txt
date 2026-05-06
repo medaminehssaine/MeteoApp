@@ -1,0 +1,19 @@
+Project: Alpha Client Portal
+
+Risk: Authentication dependency delay
+Category: TECHNICAL
+Probability: 55
+Impact: 70
+Mitigation: Reserve an integration slot and prepare a fallback mock provider.
+
+Risk: UAT availability
+Category: ORGANIZATIONAL
+Probability: 40
+Impact: 60
+Mitigation: Book reviewer windows two weeks before UAT starts.
+
+Risk: Budget pressure
+Category: FINANCIAL
+Probability: 30
+Impact: 65
+Mitigation: Review scope weekly and defer non-critical reporting widgets.

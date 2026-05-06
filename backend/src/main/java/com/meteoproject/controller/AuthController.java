@@ -2,6 +2,8 @@ package com.meteoproject.controller;
 
 import com.meteoproject.dto.auth.*;
 import com.meteoproject.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,9 @@ public class AuthController {
 
     private final AuthService authService;
 
+    @Operation(summary = "Log in", description = "Authenticates a user and returns access and refresh tokens.")
+    @ApiResponse(responseCode = "200", description = "Login successful")
+    @ApiResponse(responseCode = "400", description = "Invalid credentials or locked account")
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));

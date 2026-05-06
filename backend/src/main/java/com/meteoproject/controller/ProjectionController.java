@@ -4,6 +4,8 @@ import com.meteoproject.dto.projection.ProjectionHistoryResponse;
 import com.meteoproject.dto.projection.ProjectionRequest;
 import com.meteoproject.dto.projection.ProjectionResponse;
 import com.meteoproject.service.ProjectionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,6 +22,10 @@ public class ProjectionController {
 
     private final ProjectionService projectionService;
 
+    @Operation(summary = "Generate a projection", description = "Generates a project projection for the requested horizon and scenario.")
+    @ApiResponse(responseCode = "200", description = "Projection generated")
+    @ApiResponse(responseCode = "400", description = "Invalid projection request")
+    @ApiResponse(responseCode = "404", description = "Project not found")
     @PostMapping("/projects/{projectId}")
     public ResponseEntity<ProjectionResponse> generate(
             @PathVariable UUID projectId,

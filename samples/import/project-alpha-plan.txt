@@ -1,0 +1,18 @@
+Project: Alpha Client Portal
+Code: ALPHA
+Start: 2026-05-01
+End: 2026-08-31
+Budget total: 120000
+Budget consumed: 42000
+
+Module: Discovery and design
+Action: Validate business requirements; status completed; progress 100; planned end 2026-05-20
+Action: Approve UX wireframes; status in progress; progress 60; planned end 2026-05-30
+
+Module: Delivery
+Action: Build authentication; status in progress; progress 40; planned end 2026-06-20
+Action: Build dashboard; status not started; progress 0; planned end 2026-07-15
+
+Module: Launch
+Action: User acceptance testing; status not started; progress 0; planned end 2026-08-15
+Action: Production deployment; status not started; progress 0; planned end 2026-08-31

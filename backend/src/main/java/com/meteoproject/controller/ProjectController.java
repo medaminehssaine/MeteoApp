@@ -2,6 +2,8 @@ package com.meteoproject.controller;
 
 import com.meteoproject.dto.project.*;
 import com.meteoproject.service.ProjectService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,9 @@ public class ProjectController {
 
     private final ProjectService projectService;
 
+    @Operation(summary = "Create a project", description = "Creates a project owned by the authenticated user.")
+    @ApiResponse(responseCode = "201", description = "Project created")
+    @ApiResponse(responseCode = "400", description = "Invalid project request")
     @PostMapping
     public ResponseEntity<ProjectResponse> createProject(
             Authentication authentication,
@@ -39,11 +44,16 @@ public class ProjectController {
         return ResponseEntity.ok(projectService.updateProject(id, request));
     }
 
+    @Operation(summary = "Get a project", description = "Returns full details for one project.")
+    @ApiResponse(responseCode = "200", description = "Project found")
+    @ApiResponse(responseCode = "404", description = "Project not found")
     @GetMapping("/{id}")
     public ResponseEntity<ProjectResponse> getProject(@PathVariable UUID id) {
         return ResponseEntity.ok(projectService.getProject(id));
     }
 
+    @Operation(summary = "List projects", description = "Returns paginated projects visible to the authenticated user.")
+    @ApiResponse(responseCode = "200", description = "Projects returned")
     @GetMapping
     public ResponseEntity<Page<ProjectSummaryResponse>> listProjects(
             Authentication authentication,

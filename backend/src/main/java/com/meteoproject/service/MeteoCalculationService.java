@@ -203,7 +203,7 @@ public class MeteoCalculationService {
 
     // ── Private: Score Calculation ──────────────────────────────────────
 
-    private BigDecimal calculateGlobalScore(UUID projectId) {
+    BigDecimal calculateGlobalScore(UUID projectId) {
         List<ProjectIndicator> indicators = projectIndicatorRepository.findByProjectIdAndIsActiveTrue(projectId);
 
         if (indicators.isEmpty()) {
@@ -377,7 +377,7 @@ public class MeteoCalculationService {
 
     // ── Private: Helpers ───────────────────────────────────────────────
 
-    private MeteoState determineState(BigDecimal score) {
+    MeteoState determineState(BigDecimal score) {
         int s = score.intValue();
         MeteoProperties.Thresholds t = meteoProperties.getThresholds();
 

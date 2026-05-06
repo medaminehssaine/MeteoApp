@@ -1,0 +1,5 @@
+code,name,value,green,orange,red,inverted,category
+DELIVERY_PROGRESS,Delivery progress,45,90,75,50,false,PROGRESS
+BUDGET_CONSUMPTION,Budget consumed percent,35,70,90,120,true,BUDGET
+DEFECT_ESCAPE,Defect escape rate,8,5,15,30,true,QUALITY
+TEAM_CAPACITY,Team capacity,82,90,75,50,false,PROGRESS

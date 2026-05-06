@@ -255,7 +255,7 @@ public class IndicatorService {
      * For normal indicators: score = ((value - red) / (green - red)) * 100, clamped 0-100
      * For inverted indicators: score = ((red - value) / (red - green)) * 100, clamped 0-100
      */
-    private int calculateScore(BigDecimal value, ProjectIndicator pi) {
+    int calculateScore(BigDecimal value, ProjectIndicator pi) {
         BigDecimal green = pi.getThresholdGreen();
         BigDecimal red = pi.getThresholdRed();
         boolean inverted = Boolean.TRUE.equals(pi.getIndicatorLibrary().getIsInverted());
