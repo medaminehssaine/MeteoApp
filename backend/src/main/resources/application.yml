@@ -1,0 +1,113 @@
+spring:
+  application:
+    name: meteo-project
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:meteo_db}
+    username: ${DB_USERNAME:meteo_user}
+    password: ${DB_PASSWORD:meteo_pass_2026}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+    time-zone: UTC
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring.servlet.multipart:
+  max-file-size: 10MB
+  max-request-size: 15MB
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:mySecretKeyForDevelopmentOnlyChangeInProductionAtLeast256BitsLong123456}
+    access-token-expiration: 3600000
+    refresh-token-expiration: 604800000
+    issuer: meteo-project
+  security:
+    max-failed-attempts: 5
+    lock-duration-minutes: 30
+    bcrypt-strength: 12
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:4200,http://127.0.0.1:4200,http://0.0.0.0:4200}
+
+meteo:
+  thresholds:
+    soleil: 85
+    nuage-clair: 70
+    nuage-charge: 50
+  forcing:
+    blocked-action-days: 5
+    late-actions-pct: 30
+    budget-overrun-pct: 120
+    no-update-days: 10
+  criticality-coefficients:
+    LOW: 0.5
+    MEDIUM: 1.0
+    HIGH: 1.5
+    CRITICAL: 2.0
+  cqd:
+    cost-aligned-max: 5
+    cost-tension-max: 15
+    quality-aligned-min: 70
+    quality-tension-min: 50
+    delay-aligned-min: -5
+    delay-tension-min: -15
+  ai:
+    weights:
+      trend: 0.30
+      simulation: 0.25
+      action-plan: 0.20
+      risk: 0.15
+      capacity: 0.10
+    monte-carlo-iterations: 100
+    max-history-points: 10
+    min-history-points: 3
+    confidence:
+      high-threshold: 70
+      medium-threshold: 45
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.meteoproject: DEBUG
+    org.springframework.security: WARN
+
+# ── AI / Groq (Cloud LLM) ──────────────────
+ai:
+  groq:
+    base-url: ${GROQ_URL:https://api.groq.com/openai/v1}
+    model: ${GROQ_MODEL:llama-3.3-70b-versatile}
+    api-key: ${GROQ_API_KEY:}

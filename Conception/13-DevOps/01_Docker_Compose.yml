@@ -1,0 +1,91 @@
+# DOCKER COMPOSE - MÉTÉO PROJET (Development)
+version: '3.9'
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: meteo-postgres
+    environment:
+      POSTGRES_DB: meteo_project
+      POSTGRES_USER: meteo
+      POSTGRES_PASSWORD: meteo_dev_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meteo -d meteo_project"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Redis Cache
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: meteo-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Spring Boot Backend
+  # ============================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: meteo-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_USERNAME: meteo
+      DB_PASSWORD: meteo_dev_2026
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/meteo_project
+      SPRING_DATA_REDIS_HOST: redis
+      JWT_SECRET: dev-secret-key-change-in-production-min-256-bits-long-string
+      CORS_ORIGINS: http://localhost:4200
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
+  # Angular Frontend
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: meteo-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+
+# ============================================
+# USAGE:
+#   docker-compose up -d              # Start all services
+#   docker-compose logs -f backend    # Follow backend logs
+#   docker-compose down               # Stop all
+#   docker-compose down -v            # Stop + remove volumes
+# ============================================

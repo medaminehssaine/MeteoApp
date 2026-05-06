@@ -1,0 +1,395 @@
+%% ==========================================
+%% SEQUENCE DIAGRAM 1: Authentication Flow
+%% ==========================================
+
+sequenceDiagram
+    actor User as Chef Projet
+    participant UI as Angular App
+    participant Int as JWT Interceptor
+    participant Auth as AuthController
+    participant Svc as AuthService
+    participant JWT as JwtTokenProvider
+    participant DB as PostgreSQL
+    participant Redis as Redis Cache
+
+    User->>UI: Saisir email + password
+    UI->>Auth: POST /api/v1/auth/login<br/>{email, password}
+    Auth->>Svc: authenticate(loginRequest)
+    Svc->>DB: findByEmail(email)
+    DB-->>Svc: User entity
+
+    alt User locked
+        Svc-->>Auth: throw AccountLockedException
+        Auth-->>UI: 401 "Compte verrouillé"
+    end
+
+    Svc->>Svc: BCrypt.matches(password, hash)
+
+    alt Invalid password
+        Svc->>DB: incrementFailedAttempts()
+        alt failedAttempts >= 5
+            Svc->>DB: lockAccount(30 minutes)
+        end
+        Svc-->>Auth: throw BadCredentialsException
+        Auth-->>UI: 401 "Identifiants invalides"
+    end
+
+    Svc->>DB: resetFailedAttempts()
+    Svc->>DB: updateLastLoginAt()
+    Svc->>JWT: generateAccessToken(user, 1h)
+    JWT-->>Svc: accessToken
+    Svc->>JWT: generateRefreshToken(user, 7d)
+    JWT-->>Svc: refreshToken
+    Svc->>DB: saveRefreshToken(token)
+    Svc-->>Auth: AuthResponse
+    Auth-->>UI: 200 {accessToken, refreshToken, user, expiresIn}
+    UI->>UI: Store tokens in memory
+    UI-->>User: Redirect to Dashboard
+
+    Note over UI,Auth: --- Subsequent API Calls ---
+
+    User->>UI: Navigate to project
+    UI->>Int: GET /api/v1/projects
+    Int->>Int: Add "Authorization: Bearer <token>"
+    Int->>Auth: Request with JWT header
+    Auth->>JWT: validateToken(token)
+    JWT-->>Auth: UserPrincipal
+    Auth-->>UI: 200 {projects: [...]}
+
+    Note over UI,Auth: --- Token Refresh ---
+
+    UI->>Int: GET /api/v1/projects (token expired)
+    Int->>Auth: Request with expired JWT
+    Auth-->>Int: 401 Token expired
+    Int->>Auth: POST /api/v1/auth/refresh<br/>{refreshToken}
+    Auth->>Svc: refreshAccessToken(refreshToken)
+    Svc->>DB: findRefreshToken(token)
+    Svc->>JWT: generateAccessToken(user, 1h)
+    Svc-->>Auth: new accessToken
+    Auth-->>Int: 200 {accessToken}
+    Int->>Int: Retry original request with new token
+    Int->>Auth: GET /api/v1/projects (new token)
+    Auth-->>UI: 200 {projects: [...]}
+
+---
+
+%% ==========================================
+%% SEQUENCE DIAGRAM 2: Record Indicator Value + Météo Recalculation
+%% ==========================================
+
+sequenceDiagram
+    actor Chef as Chef Projet
+    participant UI as Angular App
+    participant Ctrl as IndicatorController
+    participant ISvc as ProjectIndicatorService
+    participant MSvc as MeteoCalculationService
+    participant FRE as ForcingRuleEngine
+    participant CSvc as CQDCalculationService
+    participant DB as PostgreSQL
+    participant Cache as Redis
+
+    Chef->>UI: Saisir valeur indicateur PRG-001 = 72%
+    UI->>Ctrl: POST /api/v1/projects/{pid}/indicators/{iid}/values<br/>{value: 72, comment: "Sprint 5 terminé"}
+
+    Ctrl->>ISvc: recordValue(projectId, indicatorId, value, comment)
+
+    ISvc->>ISvc: Validate value (R1: 0-100)
+    ISvc->>ISvc: calculateScore(72, thresholds)
+    Note right of ISvc: thresholds: G=90, O=75, R=50<br/>72 >= 50 (rouge) et < 75 (orange)<br/>score = 50 + (72-50)/(75-50) × 30<br/>score = 50 + 26.4 = 76
+
+    ISvc->>ISvc: determineState(76) → GOOD
+    ISvc->>DB: save IndicatorValueHistory(value=72, score=76, state=GOOD)
+    ISvc->>DB: update ProjectIndicator(currentValue=72, currentScore=76)
+    ISvc-->>Ctrl: IndicatorValueResponse
+
+    Ctrl->>MSvc: recalculate(projectId)  [ASYNC]
+    Note right of Ctrl: Returns 200 immediately
+
+    MSvc->>DB: loadAllActiveIndicators(projectId)
+    DB-->>MSvc: List<ProjectIndicator> (e.g. 8 indicators)
+
+    loop For each indicator
+        MSvc->>MSvc: weightedScore = score × weight × critCoeff
+    end
+
+    MSvc->>MSvc: projectScore = Σ(weightedScores) / Σ(weights × critCoeffs)
+    Note right of MSvc: Example: projectScore = 71.3
+
+    MSvc->>MSvc: rawMeteo = convertToMeteo(71.3) → NUAGE_CLAIR
+
+    MSvc->>FRE: evaluate(project)
+    FRE->>DB: count blocked actions > 5 days
+    FRE->>DB: count late actions (%)
+    FRE->>DB: check budget variance
+    FRE->>DB: check CRITICAL indicators without action
+    FRE->>DB: check last update date
+
+    alt Any forcing rule triggered
+        FRE-->>MSvc: ForcingResult(forced=true, rules=[R20], meteo=ORAGE)
+        MSvc->>MSvc: finalMeteo = ORAGE (forced)
+    else No forcing
+        FRE-->>MSvc: ForcingResult(forced=false)
+        MSvc->>MSvc: finalMeteo = NUAGE_CLAIR
+    end
+
+    MSvc->>MSvc: generateExplanation(project, scores, forcing)
+    MSvc->>DB: save MeteoHistory(score=71.3, meteo=NUAGE_CLAIR, ...)
+    MSvc->>Cache: invalidate("meteo:project:{pid}")
+    MSvc->>Cache: invalidate("dashboard:*")
+
+    par CQD Recalculation
+        Ctrl->>CSvc: recalculate(projectId) [ASYNC]
+        CSvc->>DB: load project budget data
+        CSvc->>CSvc: costVariance = (consumed/planned - 1) × 100
+        CSvc->>CSvc: qualityScore = avg(QUALITY indicators)
+        CSvc->>CSvc: delayVariance = (actual/planned - 1) × 100
+        CSvc->>CSvc: determine C/Q/D states
+        CSvc->>CSvc: calculate trends (last 3 entries)
+        CSvc->>DB: save CQDHistory
+        CSvc->>Cache: invalidate("cqd:project:{pid}")
+    end
+
+    Ctrl-->>UI: 201 {value, score, state}
+    UI-->>Chef: Indicateur mis à jour ✓
+
+---
+
+%% ==========================================
+%% SEQUENCE DIAGRAM 3: AI Projection Generation
+%% ==========================================
+
+sequenceDiagram
+    actor Director as Directeur
+    participant UI as Angular App
+    participant Ctrl as ProjectionController
+    participant PSvc as ProjectionService
+    participant L1 as TrendAnalyzer
+    participant L2 as PlanSimulator
+    participant L3 as ActionPlanEvaluator
+    participant L4 as RiskIntegrator
+    participant L5 as CapacityAnalyzer
+    participant Comp as ProjectionCompositor
+    participant Conf as ConfidenceCalculator
+    participant Scen as ScenarioGenerator
+    participant Expl as ExplanationEngine
+    participant Reco as RecommendationEngine
+    participant DB as PostgreSQL
+    participant Cache as Redis
+
+    Director->>UI: Consulter projections J+14
+    UI->>Ctrl: GET /api/v1/projects/{pid}/projections?horizon=14
+    Ctrl->>Cache: get("projection:project:{pid}:14")
+
+    alt Cache hit
+        Cache-->>Ctrl: cached Projection
+        Ctrl-->>UI: 200 ProjectionResponse
+    end
+
+    Ctrl->>PSvc: generateProjection(projectId, 14)
+
+    par Layer 1: Trend Analysis
+        PSvc->>L1: analyzeTrend(project, 14)
+        L1->>DB: load indicator history (max 10 points each)
+        L1->>L1: Weighted Moving Average per indicator
+        L1->>L1: Linear Regression (slope + R²)
+        L1->>L1: Project values at J+14
+        L1->>L1: Calculate data quality factor
+        L1-->>PSvc: TrendResult(score=72.5, confidence=0.75)
+    and Layer 2: Plan Simulation
+        PSvc->>L2: simulatePlan(project, 14)
+        L2->>DB: load actions + dependencies
+        L2->>L2: Build DAG
+        L2->>L2: Find critical path
+        L2->>L2: Calculate velocity (14-day window)
+        L2->>L2: Monte Carlo × 100 simulations
+        L2->>L2: Analyze distribution (mean, P25, P75)
+        L2-->>PSvc: SimulationResult(score=68.3, confidence=0.70)
+    and Layer 3: Action Plan Evaluation
+        PSvc->>L3: evaluateActionPlan(project)
+        L3->>DB: load indicators in WARNING/ALERT/CRITICAL
+        L3->>DB: load corrective actions
+        L3->>L3: Check coverage (indicator → actions)
+        L3->>L3: Evaluate action effectiveness
+        L3-->>PSvc: ActionPlanResult(score=55.0, confidence=0.65)
+    and Layer 4: Risk Integration
+        PSvc->>L4: integrateRisks(project, 14)
+        L4->>DB: load active risks
+        L4->>L4: Calculate exposure per risk
+        L4->>L4: Apply status adjustments
+        L4->>L4: Apply category×horizon factors
+        L4->>L4: Normalize total exposure
+        L4-->>PSvc: RiskResult(score=62.0, confidence=0.70)
+    and Layer 5: Capacity Analysis
+        PSvc->>L5: analyzeCapacity(project, 14)
+        L5->>DB: load remaining actions
+        L5->>DB: count active team members
+        L5->>L5: Calculate load ratio
+        L5->>L5: Adjust with resource indicators
+        L5-->>PSvc: CapacityResult(score=72.0, confidence=0.60)
+    end
+
+    PSvc->>Comp: compose(trend, simulation, actionPlan, risk, capacity)
+
+    Comp->>Comp: weightedScore = 72.5×0.30 + 68.3×0.25 + 55.0×0.20 + 62.0×0.15 + 72.0×0.10
+    Note right of Comp: = 21.75 + 17.08 + 11.00 + 9.30 + 7.20<br/>= 66.33
+
+    Comp->>Comp: projectedMeteo = convertToMeteo(66.33) → NUAGE_CHARGE
+
+    Comp->>Conf: calculate(components, horizon=14)
+    Conf->>Conf: layerConfidence = weighted avg → 0.70
+    Conf->>Conf: coherence (stdDev=6.8 < 10) → 1.0
+    Conf->>Conf: horizonFactor(14) → 0.85
+    Conf->>Conf: dataFactor(12 points) → 0.85
+    Conf->>Conf: final = 0.70×0.35 + 1.0×0.25 + 0.85×0.25 + 0.85×0.15
+    Note right of Conf: = 0.245 + 0.25 + 0.2125 + 0.1275<br/>= 0.835 → 83.5% → HIGH
+    Conf-->>Comp: ConfidenceResult(level=HIGH, pct=83.5)
+
+    Comp->>Scen: generate(66.33, trend, simulation, risk)
+    Scen->>Scen: nominal(66.33) → NUAGE_CHARGE
+    Scen->>Scen: optimistic(66.33 + 12.5 = 78.8) → NUAGE_CLAIR
+    Scen->>Scen: pessimistic(66.33 - 18.2 = 48.1) → ORAGE
+    Scen-->>Comp: Scenarios(nominal, optimistic, pessimistic)
+
+    Comp->>Reco: generate(context)
+    Reco->>Reco: Check 6 recommendation rules
+    Reco->>Reco: Sort by priority, limit to 5
+    Reco-->>Comp: List<Recommendation>
+
+    Comp->>Expl: generate(context)
+    Expl->>Expl: Template-based NLG
+    Expl-->>Comp: explanation string
+
+    Comp-->>PSvc: Projection
+
+    PSvc->>DB: save Projection
+    PSvc->>Cache: set("projection:project:{pid}:14", result, TTL=15min)
+    PSvc-->>Ctrl: Projection
+
+    Ctrl-->>UI: 200 ProjectionResponse
+    UI-->>Director: Afficher dashboard projection
+
+---
+
+%% ==========================================
+%% SEQUENCE DIAGRAM 4: Create Project + Full Setup
+%% ==========================================
+
+sequenceDiagram
+    actor Dir as Directeur
+    participant UI as Angular App
+    participant PC as ProjectController
+    participant PS as ProjectService
+    participant MS as ModuleService
+    participant IS as ProjectIndicatorService
+    participant RS as UserProjectRoleService
+    participant DB as PostgreSQL
+    participant Audit as AuditService
+
+    Dir->>UI: Remplir formulaire création projet
+    UI->>PC: POST /api/v1/projects<br/>{name, code, dates, budget, type, criticality, ...}
+
+    PC->>PS: createProject(request, currentUser)
+    PS->>PS: Validate project data
+    PS->>DB: check unique name
+    PS->>DB: check unique code
+    PS->>DB: save Project(status=PREPARATION)
+    DB-->>PS: saved Project
+
+    PS->>RS: assignRole(director, project, DIRECTOR)
+    RS->>DB: save UserProjectRole
+
+    PS->>Audit: log(CREATE, PROJECT, projectId)
+    PS-->>PC: ProjectResponse
+
+    PC-->>UI: 201 {project}
+    UI-->>Dir: Projet créé, configurer modules
+
+    Dir->>UI: Ajouter Module "Backend API"
+    UI->>PC: POST /api/v1/projects/{pid}/modules<br/>{name: "Backend API", weight: 40, ...}
+    PC->>MS: createModule(projectId, request)
+    MS->>MS: Validate weight (total <= 100)
+    MS->>DB: save Module
+    MS-->>PC: ModuleResponse
+    PC-->>UI: 201 {module}
+
+    Dir->>UI: Sélectionner indicateurs depuis bibliothèque
+    UI->>PC: POST /api/v1/projects/{pid}/indicators<br/>{indicatorLibraryId: "PRG-001", weight: 30, criticality: HIGH}
+    PC->>IS: addIndicator(projectId, request)
+    IS->>DB: load IndicatorLibrary(PRG-001)
+    IS->>IS: Copy default thresholds
+    IS->>IS: Set criticality coefficient (HIGH → 1.5)
+    IS->>DB: save ProjectIndicator
+    IS-->>PC: ProjectIndicatorResponse
+    PC-->>UI: 201 {indicator}
+
+    Note over Dir,UI: Répéter pour chaque module et indicateur
+
+    Dir->>UI: Affecter Chef Projet
+    UI->>PC: POST /api/v1/projects/{pid}/team<br/>{userId: "chef-uuid", role: "CHEF"}
+    PC->>RS: assignRole(chef, project, CHEF)
+    RS->>DB: save UserProjectRole
+    PC-->>UI: 200 OK
+
+    Dir->>UI: Valider périmètre → status = IN_PROGRESS
+    UI->>PC: PATCH /api/v1/projects/{pid}/status<br/>{status: "IN_PROGRESS"}
+    PC->>PS: updateStatus(projectId, IN_PROGRESS)
+    PS->>PS: Validate: has modules, has indicators, has chef
+    PS->>DB: update project status
+    PS->>Audit: log(UPDATE, PROJECT, projectId, "Status → IN_PROGRESS")
+    PS-->>PC: ProjectResponse
+    PC-->>UI: 200 {project with status IN_PROGRESS}
+
+---
+
+%% ==========================================
+%% SEQUENCE DIAGRAM 5: Forcing Rules Evaluation
+%% ==========================================
+
+sequenceDiagram
+    participant MSvc as MeteoCalculationService
+    participant FRE as ForcingRuleEngine
+    participant DB as PostgreSQL
+
+    MSvc->>FRE: evaluate(project)
+
+    Note over FRE: R20: Actions bloquées > 5 jours
+    FRE->>DB: SELECT COUNT(*) FROM actions<br/>WHERE project_id = ? AND status = 'BLOCKED'<br/>AND blocked_since < NOW() - INTERVAL '5 days'
+    DB-->>FRE: count = 2
+
+    alt count >= 1
+        FRE->>FRE: addRule(R20, "2 actions bloquées > 5 jours")
+    end
+
+    Note over FRE: R21: >= 30% actions en retard
+    FRE->>DB: SELECT<br/>  COUNT(*) FILTER (WHERE planned_end < NOW() AND status != 'COMPLETED') as late,<br/>  COUNT(*) as total<br/>FROM actions WHERE project_id = ?
+    DB-->>FRE: late=4, total=20 → 20%
+
+    alt ratio >= 30%
+        FRE->>FRE: addRule(R21, "X% actions en retard")
+    end
+
+    Note over FRE: R22: Budget > 120%
+    FRE->>DB: SELECT budget_consumed, budget_total FROM projects WHERE id = ?
+    DB-->>FRE: consumed=150000, total=200000 → 75%
+
+    alt consumed/total > 120%
+        FRE->>FRE: addRule(R22, "Budget à X%")
+    end
+
+    Note over FRE: R23: Indicateur CRITICAL sans action corrective
+    FRE->>DB: SELECT pi.* FROM project_indicators pi<br/>WHERE pi.current_score < 20<br/>AND NOT EXISTS (SELECT 1 FROM corrective_actions ca<br/>  WHERE ca.indicator_id = pi.id AND ca.status IN ('OPEN','IN_PROGRESS'))
+    DB-->>FRE: 1 indicator found
+
+    alt count >= 1
+        FRE->>FRE: addRule(R23, "Indicateur RSK-002 CRITICAL sans action")
+    end
+
+    Note over FRE: R24: Aucune mise à jour > 10 jours
+    FRE->>DB: SELECT last_update_at FROM projects WHERE id = ?
+    DB-->>FRE: last_update_at = 3 days ago
+
+    alt daysWithoutUpdate > 10
+        FRE->>FRE: addRule(R24, "Aucune MAJ depuis X jours")
+    end
+
+    FRE-->>MSvc: ForcingResult(forced=true, rules=[R20, R23],<br/>forcedMeteo=ORAGE,<br/>explanation="Forçage ORAGE: 2 actions bloquées > 5j,<br/>indicateur RSK-002 CRITICAL sans action corrective")

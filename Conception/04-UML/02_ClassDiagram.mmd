@@ -1,0 +1,701 @@
+classDiagram
+    %% ==========================================
+    %% MÉTÉO PROJET v2.0 - CLASS DIAGRAM
+    %% ==========================================
+
+    %% ===== USER & AUTHENTICATION =====
+
+    class User {
+        -UUID id
+        -String email
+        -String passwordHash
+        -String firstName
+        -String lastName
+        -String phone
+        -Role defaultRole
+        -Boolean active
+        -DateTime lastLoginAt
+        -Integer failedLoginAttempts
+        -DateTime lockedUntil
+        -DateTime createdAt
+        -DateTime updatedAt
+        +login(email, password) AuthResponse
+        +logout() void
+        +resetPassword(newPassword) void
+        +hasRole(project, role) Boolean
+        +getProjects() List~Project~
+        +isLocked() Boolean
+        +incrementFailedAttempts() void
+        +resetFailedAttempts() void
+    }
+
+    class AuthResponse {
+        -String accessToken
+        -String refreshToken
+        -UserDTO user
+        -Long expiresIn
+    }
+
+    class UserProjectRole {
+        -UUID id
+        -UUID userId
+        -UUID projectId
+        -Role role
+        -Date assignedAt
+        -Date removedAt
+        +isActive() Boolean
+        +assignRole(user, project, role) void
+        +revokeRole() void
+    }
+
+    class Role {
+        <<enumeration>>
+        ADMIN
+        SPONSOR
+        DIRECTOR
+        CHEF
+        MEMBER
+        OBSERVER
+    }
+
+    %% ===== PROJECT CORE =====
+
+    class Project {
+        -UUID id
+        -String name
+        -String code
+        -String shortDescription
+        -String longDescription
+        -Date startDate
+        -Date endDate
+        -Decimal budgetTotal
+        -Decimal budgetConsumed
+        -ProjectType type
+        -Criticality criticality
+        -Visibility visibility
+        -ProjectStatus status
+        -UUID sponsorId
+        -UUID directorId
+        -UUID chefId
+        -DateTime lastUpdateAt
+        -DateTime createdAt
+        -DateTime updatedAt
+        +create(projectData) Project
+        +update(projectData) void
+        +archive() void
+        +getOverallProgress() Decimal
+        +getCurrentMeteo() MeteoState
+        +getCurrentCQD() CQDSnapshot
+        +getProjections(horizon) List~Projection~
+        +getBudgetVariance() Decimal
+        +getDelayVariance() Decimal
+        +getDaysRemaining() Integer
+    }
+
+    class ProjectType {
+        <<enumeration>>
+        INFRASTRUCTURE
+        APPLICATION
+        ORGANIZATIONAL
+    }
+
+    class Criticality {
+        <<enumeration>>
+        LOW
+        MEDIUM
+        HIGH
+        CRITICAL
+    }
+
+    class ProjectStatus {
+        <<enumeration>>
+        PREPARATION
+        IN_PROGRESS
+        PAUSED
+        COMPLETED
+        CANCELLED
+        ARCHIVED
+    }
+
+    class Visibility {
+        <<enumeration>>
+        RESTRICTED
+        EXTENDED
+        PUBLIC
+    }
+
+    %% ===== MODULES & ACTIONS =====
+
+    class Module {
+        -UUID id
+        -UUID projectId
+        -String name
+        -String description
+        -Decimal weight
+        -UUID responsibleId
+        -Date startDate
+        -Date endDate
+        -Integer orderIndex
+        +create(moduleData) Module
+        +update(moduleData) void
+        +delete() void
+        +getProgress() Decimal
+        +getActions() List~Action~
+        +getActionCount() Integer
+        +getCompletedActionCount() Integer
+    }
+
+    class Action {
+        -UUID id
+        -UUID projectId
+        -UUID moduleId
+        -String title
+        -String description
+        -Integer durationDays
+        -Date plannedStart
+        -Date actualStart
+        -Date plannedEnd
+        -Date actualEnd
+        -UUID responsibleId
+        -ActionStatus status
+        -Integer progress
+        -String blockingReason
+        -BlockingType blockingType
+        -Date blockedSince
+        -Boolean isMilestone
+        -Integer orderIndex
+        +create(actionData) Action
+        +update(actionData) void
+        +updateProgress(progress) void
+        +markAsBlocked(reason, type) void
+        +unblock() void
+        +complete() void
+        +isBlocked() Boolean
+        +isLate() Boolean
+        +getRemainingDays() Integer
+        +getBlockedDays() Integer
+        +getDependencies() List~ActionDependency~
+    }
+
+    class ActionStatus {
+        <<enumeration>>
+        NOT_STARTED
+        IN_PROGRESS
+        COMPLETED
+        BLOCKED
+    }
+
+    class BlockingType {
+        <<enumeration>>
+        RESOURCE
+        DEPENDENCY
+        TECHNICAL
+        DECISION
+    }
+
+    class ActionDependency {
+        -UUID id
+        -UUID sourceActionId
+        -UUID targetActionId
+        -DependencyType type
+        -Integer lagDays
+        +create(source, target, type) ActionDependency
+        +validate() Boolean
+        +isCircular() Boolean
+    }
+
+    class DependencyType {
+        <<enumeration>>
+        FINISH_TO_START
+        START_TO_START
+        FINISH_TO_FINISH
+        START_TO_FINISH
+    }
+
+    %% ===== INDICATORS =====
+
+    class IndicatorLibrary {
+        -UUID id
+        -String code
+        -String name
+        -String description
+        -IndicatorCategory category
+        -Unit unit
+        -String calculationFormula
+        -Boolean isInverted
+        -Decimal defaultThresholdGreen
+        -Decimal defaultThresholdOrange
+        -Decimal defaultThresholdRed
+        -Decimal defaultWeight
+        -Boolean isActive
+        +create(indicatorData) IndicatorLibrary
+        +update(indicatorData) void
+        +getInstances() List~ProjectIndicator~
+    }
+
+    class IndicatorCategory {
+        <<enumeration>>
+        PROGRESS
+        BUDGET
+        RISK
+        QUALITY
+        RESOURCE
+    }
+
+    class Unit {
+        <<enumeration>>
+        PERCENTAGE
+        NUMBER
+        DHS
+        SCORE
+        DAYS
+        RATIO
+    }
+
+    class ProjectIndicator {
+        -UUID id
+        -UUID projectId
+        -UUID indicatorLibraryId
+        -Decimal thresholdGreen
+        -Decimal thresholdOrange
+        -Decimal thresholdRed
+        -Decimal weight
+        -Criticality criticality
+        -Decimal criticalityCoefficient
+        -Frequency frequency
+        -Boolean isActive
+        -Decimal currentValue
+        -Integer currentScore
+        -Date lastMeasuredAt
+        +configure(thresholds, weight) void
+        +recordValue(value, comment) IndicatorValueHistory
+        +calculateScore(value) Integer
+        +getState() IndicatorState
+        +hasCorrectiveAction() Boolean
+        +getHistory(limit) List~IndicatorValueHistory~
+        +getTrend(periods) Trend
+    }
+
+    class IndicatorValueHistory {
+        -UUID id
+        -UUID projectIndicatorId
+        -Decimal value
+        -Integer score
+        -IndicatorState state
+        -Date measuredAt
+        -String comment
+        -UUID recordedBy
+        +record(value, comment) IndicatorValueHistory
+        +getScore() Integer
+    }
+
+    class IndicatorState {
+        <<enumeration>>
+        EXCELLENT
+        GOOD
+        WARNING
+        ALERT
+        CRITICAL
+    }
+
+    class Frequency {
+        <<enumeration>>
+        DAILY
+        WEEKLY
+        BIWEEKLY
+        MONTHLY
+    }
+
+    %% ===== CORRECTIVE ACTIONS =====
+
+    class CorrectiveAction {
+        -UUID id
+        -UUID projectId
+        -UUID indicatorId
+        -UUID blockedActionId
+        -UUID riskId
+        -String title
+        -String description
+        -Priority priority
+        -UUID responsibleId
+        -Date deadline
+        -CorrectiveStatus status
+        -String expectedImpact
+        -String actualImpact
+        -Date completedAt
+        +create(actionData) CorrectiveAction
+        +update(actionData) void
+        +complete() void
+        +cancel() void
+        +isOverdue() Boolean
+        +getEffectiveness() Decimal
+    }
+
+    class Priority {
+        <<enumeration>>
+        LOW
+        MEDIUM
+        HIGH
+        CRITICAL
+    }
+
+    class CorrectiveStatus {
+        <<enumeration>>
+        OPEN
+        IN_PROGRESS
+        COMPLETED
+        CANCELLED
+    }
+
+    %% ===== RISK =====
+
+    class Risk {
+        -UUID id
+        -UUID projectId
+        -String title
+        -String description
+        -RiskCategory category
+        -Integer probability
+        -Integer impact
+        -Integer severity
+        -RiskStatus status
+        -String mitigationPlan
+        -String contingencyPlan
+        -UUID ownerId
+        -Date identifiedAt
+        -Date reviewDate
+        -Date materializedAt
+        -Date closedAt
+        +create(riskData) Risk
+        +update(riskData) void
+        +calculateSeverity() Integer
+        +materialize() void
+        +close() void
+        +getExposure() Decimal
+    }
+
+    class RiskCategory {
+        <<enumeration>>
+        TECHNICAL
+        RESOURCE
+        BUDGET
+        PLANNING
+        QUALITY
+        EXTERNAL
+    }
+
+    class RiskStatus {
+        <<enumeration>>
+        IDENTIFIED
+        ANALYZING
+        MITIGATING
+        MATERIALIZED
+        CLOSED
+    }
+
+    %% ===== MÉTÉO ENGINE =====
+
+    class MeteoHistory {
+        -UUID id
+        -UUID projectId
+        -Date calculationDate
+        -MeteoState meteoState
+        -Decimal calculatedScore
+        -Decimal rawScore
+        -Boolean wasForced
+        -JSON activeForcingRules
+        -JSON indicatorScores
+        -JSON moduleScores
+        -String explanation
+        -String triggeredBy
+        +record(projectId, state, score) MeteoHistory
+        +getExplanation() String
+    }
+
+    class MeteoState {
+        <<enumeration>>
+        SOLEIL
+        NUAGE_CLAIR
+        NUAGE_CHARGE
+        ORAGE
+    }
+
+    class MeteoCalculationService {
+        <<service>>
+        +calculateIndicatorScore(indicator, value) Integer
+        +applyWeighting(indicators) Decimal
+        +aggregateModule(module) Decimal
+        +aggregateProject(project) Decimal
+        +convertToMeteo(score) MeteoState
+        +applyForcingRules(project) ForcingResult
+        +generateExplanation(project, scores) String
+        +recalculate(projectId) MeteoHistory
+    }
+
+    class ForcingRuleEngine {
+        <<service>>
+        +checkBlockedActions(project) ForcingResult
+        +checkLateActions(project) ForcingResult
+        +checkBudgetOverrun(project) ForcingResult
+        +checkCriticalWithoutAction(project) ForcingResult
+        +checkNoUpdate(project) ForcingResult
+        +evaluate(project) ForcingResult
+    }
+
+    %% ===== CQD ENGINE =====
+
+    class CQDHistory {
+        -UUID id
+        -UUID projectId
+        -Date calculationDate
+        -CQDState costState
+        -Decimal costVariancePct
+        -Decimal costBudgetConsumed
+        -Decimal costBudgetPlanned
+        -String costExplanation
+        -CQDState qualityState
+        -Integer qualityScore
+        -String qualityExplanation
+        -CQDState delayState
+        -Decimal delayVariancePct
+        -Decimal delayPlannedProgress
+        -Decimal delayActualProgress
+        -String delayExplanation
+        -Trend costTrend
+        -Trend qualityTrend
+        -Trend delayTrend
+        +calculate(projectId) CQDHistory
+    }
+
+    class CQDState {
+        <<enumeration>>
+        ALIGNED
+        UNDER_TENSION
+        DEGRADED
+    }
+
+    class Trend {
+        <<enumeration>>
+        IMPROVING
+        STABLE
+        DETERIORATING
+    }
+
+    class CQDCalculationService {
+        <<service>>
+        +calculateCostVariance(project) Decimal
+        +calculateQualityScore(project) Integer
+        +calculateDelayVariance(project) Decimal
+        +determineCostState(variance) CQDState
+        +determineQualityState(score) CQDState
+        +determineDelayState(variance) CQDState
+        +calculateTrends(projectId) TrendSet
+        +recalculate(projectId) CQDHistory
+    }
+
+    %% ===== AI PROJECTION ENGINE =====
+
+    class Projection {
+        -UUID id
+        -UUID projectId
+        -Date projectionDate
+        -Integer horizonDays
+        -Date targetDate
+        -MeteoState projectedMeteo
+        -Decimal projectedScore
+        -ConfidenceLevel confidenceLevel
+        -Decimal confidencePct
+        -Decimal trendScore
+        -Decimal simulationScore
+        -Decimal actionPlanScore
+        -Decimal riskScore
+        -Decimal capacityScore
+        -CQDState projectedCostState
+        -CQDState projectedQualityState
+        -CQDState projectedDelayState
+        -JSON projectedIndicators
+        -String assumptions
+        -JSON keyFactors
+        -JSON scenarios
+        -JSON recommendations
+        -String explanation
+        -MeteoState actualMeteo
+        -Decimal actualScore
+        -Decimal accuracyScore
+    }
+
+    class ConfidenceLevel {
+        <<enumeration>>
+        HIGH
+        MEDIUM
+        LOW
+    }
+
+    class TrendAnalyzer {
+        <<service>>
+        -int maxHistoryPoints
+        -int minHistoryPoints
+        +analyzeTrend(project, horizon) TrendResult
+        -weightedMovingAverage(values, weights) Decimal
+        -linearRegression(values) RegressionResult
+        -projectValue(wma, slope, horizon) Decimal
+        -calculateDataQualityFactor(n) Decimal
+        -detectTrendDirection(slope) TrendDirection
+    }
+
+    class PlanSimulator {
+        <<service>>
+        -int monteCarloIterations
+        -double durationVariance
+        -int velocityWindowDays
+        +simulatePlan(project, horizon) SimulationResult
+        -buildDependencyGraph(project) DAG
+        -findCriticalPath(dag) List~Action~
+        -calculateVelocity(project) VelocityStats
+        -runMonteCarloSimulation(dag, velocity, n) double[]
+        -analyzeDistribution(scores) DistributionStats
+    }
+
+    class ActionPlanEvaluator {
+        <<service>>
+        +evaluateActionPlan(project) ActionPlanResult
+        -identifyProblematicIndicators(project) List~ProjectIndicator~
+        -evaluateCorrectiveActions(actions) Decimal
+        -checkIndicatorCoverage(project) CoverageResult
+        -measureActionEffectiveness(action) Decimal
+    }
+
+    class RiskIntegrator {
+        <<service>>
+        +integrateRisks(project, horizon) RiskResult
+        -calculateExposure(risk) Decimal
+        -adjustForStatus(exposure, status) Decimal
+        -categoryHorizonFactor(category, horizon) Decimal
+        -normalizeExposure(total) Decimal
+    }
+
+    class CapacityAnalyzer {
+        <<service>>
+        +analyzeCapacity(project, horizon) CapacityResult
+        -calculateRemainingWork(project) Integer
+        -calculateAvailableCapacity(project, horizon) Integer
+        -calculateLoadRatio(remaining, capacity) Decimal
+    }
+
+    class ProjectionCompositor {
+        <<service>>
+        -Map~String,Double~ layerWeights
+        +compose(trend, simulation, actionPlan, risk, capacity) Projection
+        -weightedCombine(scores, weights) Decimal
+        -projectCQD(components, horizon) ProjectedCQD
+    }
+
+    class ConfidenceCalculator {
+        <<service>>
+        +calculate(components, horizon) ConfidenceResult
+        -layerConfidence(components) Decimal
+        -interLayerCoherence(scores) Decimal
+        -horizonFactor(horizon) Decimal
+        -dataFactor(historySize) Decimal
+    }
+
+    class ScenarioGenerator {
+        <<service>>
+        +generate(score, trend, simulation, risk) Scenarios
+        -generateNominal(score) Scenario
+        -generateOptimistic(score, simulation, risk) Scenario
+        -generatePessimistic(score, simulation, risk) Scenario
+        -calculateOptimisticDelta(simulation, risk) Decimal
+        -calculatePessimisticDelta(simulation, risk) Decimal
+    }
+
+    class ExplanationEngine {
+        <<service>>
+        +generate(context) String
+        -generateSummary(context) String
+        -generateKeyFactors(context) String
+        -generateWarnings(context) String
+        -generateComparison(context) String
+    }
+
+    class RecommendationEngine {
+        <<service>>
+        -int maxRecommendations
+        +generate(context) List~Recommendation~
+        -checkBlockedActions(context) List~Recommendation~
+        -checkUncoveredIndicators(context) List~Recommendation~
+        -checkDeterioratingTrends(context) List~Recommendation~
+        -checkCapacityIssues(context) List~Recommendation~
+        -checkRiskCoverage(context) List~Recommendation~
+        -checkBudgetDrift(context) List~Recommendation~
+    }
+
+    class AccuracyTracker {
+        <<service>>
+        +trackMaturedProjections() void
+        +calculateMAE(projectId) Decimal
+        +calculateAccuracyRate(projectId) Decimal
+        +calculateStateMatchRate(projectId) Decimal
+    }
+
+    %% ===== AUDIT =====
+
+    class AuditLog {
+        -UUID id
+        -UUID userId
+        -UUID projectId
+        -AuditAction action
+        -String entityType
+        -UUID entityId
+        -JSON oldValues
+        -JSON newValues
+        -String description
+        -String ipAddress
+        -String userAgent
+    }
+
+    %% ===== RELATIONSHIPS =====
+
+    User "1" -- "*" UserProjectRole : has roles
+    Project "1" -- "*" UserProjectRole : has users
+    User "1" -- "*" Project : sponsors/directs/manages
+
+    Project "1" -- "*" Module : contains
+    Module "1" -- "*" Action : groups
+    Action "1" -- "*" ActionDependency : source of
+    Action "1" -- "*" ActionDependency : target of
+
+    Project "1" -- "*" ProjectIndicator : tracks
+    IndicatorLibrary "1" -- "*" ProjectIndicator : instantiated as
+    ProjectIndicator "1" -- "*" IndicatorValueHistory : has history
+
+    Project "1" -- "*" CorrectiveAction : has
+    ProjectIndicator "0..1" -- "*" CorrectiveAction : triggers
+    Action "0..1" -- "*" CorrectiveAction : fixed by
+    Risk "0..1" -- "*" CorrectiveAction : mitigated by
+
+    Project "1" -- "*" Risk : has risks
+    Project "1" -- "*" MeteoHistory : has météo history
+    Project "1" -- "*" CQDHistory : has CQD history
+    Project "1" -- "*" Projection : has projections
+
+    %% Service dependencies
+    MeteoCalculationService ..> ForcingRuleEngine : uses
+    MeteoCalculationService ..> Project : calculates for
+    MeteoCalculationService ..> MeteoHistory : creates
+
+    CQDCalculationService ..> Project : calculates for
+    CQDCalculationService ..> CQDHistory : creates
+
+    ProjectionCompositor ..> TrendAnalyzer : uses
+    ProjectionCompositor ..> PlanSimulator : uses
+    ProjectionCompositor ..> ActionPlanEvaluator : uses
+    ProjectionCompositor ..> RiskIntegrator : uses
+    ProjectionCompositor ..> CapacityAnalyzer : uses
+    ProjectionCompositor ..> ConfidenceCalculator : uses
+    ProjectionCompositor ..> ScenarioGenerator : uses
+    ProjectionCompositor ..> ExplanationEngine : uses
+    ProjectionCompositor ..> RecommendationEngine : uses
+    ProjectionCompositor ..> Projection : creates
+
+    AccuracyTracker ..> Projection : evaluates

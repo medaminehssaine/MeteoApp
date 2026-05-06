@@ -1,0 +1,28 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.iml
+
+# Build artifacts
+backend/target
+frontend/dist
+frontend/node_modules
+
+# Documentation
+Conception
+AI-Training-Guide
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Environment files
+.env
+*.env.local

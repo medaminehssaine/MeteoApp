@@ -1,0 +1,217 @@
+%% ==========================================
+%% ACTIVITY DIAGRAM 1: Météo Calculation Pipeline
+%% ==========================================
+
+graph TD
+    Start([Trigger: Indicator Value Updated]) --> LoadIndicators[Charger tous les indicateurs<br/>actifs du projet]
+    LoadIndicators --> LoopStart{Pour chaque<br/>indicateur}
+
+    LoopStart --> CalcScore[Calculer score 0-100<br/>selon seuils V/O/R]
+    CalcScore --> ApplyWeight[Appliquer poids × coeff_criticité]
+    ApplyWeight --> LoopStart
+
+    LoopStart -- Tous traités --> AggModule[Agréger scores par module<br/>Score_module = Σ(score×poids) / Σ(poids)]
+    AggModule --> AggProject[Agréger score projet<br/>Score_projet = Σ(score_module×poids) / Σ(poids)]
+    AggProject --> ConvertMeteo[Convertir score → Météo<br/>≥85:SOLEIL, ≥70:NUAGE_CLAIR<br/>≥50:NUAGE_CHARGE, <50:ORAGE]
+    ConvertMeteo --> SaveRaw[Sauver rawScore + rawMeteo]
+
+    SaveRaw --> CheckForcing{Évaluer règles<br/>de forçage R20-R24}
+
+    CheckForcing -- R20: Action bloquée > 5j --> ForceOrage[FORCER ORAGE]
+    CheckForcing -- R21: ≥30% actions en retard --> ForceOrage
+    CheckForcing -- R22: Budget > 120% --> ForceOrage
+    CheckForcing -- R23: CRITICAL sans action --> ForceOrage
+    CheckForcing -- R24: Pas de MAJ > 10j --> ForceOrage
+    CheckForcing -- Aucune règle --> KeepMeteo[Garder météo calculée]
+
+    ForceOrage --> GenExplanation[Générer explication<br/>en langage naturel]
+    KeepMeteo --> GenExplanation
+
+    GenExplanation --> SaveHistory[Sauvegarder MeteoHistory<br/>score, état, forçage, explication]
+    SaveHistory --> InvalidateCache[Invalider cache Redis<br/>meteo:project:id]
+    InvalidateCache --> TriggerCQD[Déclencher recalcul CQD<br/>en parallèle]
+    TriggerCQD --> End([Fin])
+
+    style ForceOrage fill:#f8d7da
+    style KeepMeteo fill:#d4edda
+    style GenExplanation fill:#fff4e1
+
+---
+
+%% ==========================================
+%% ACTIVITY DIAGRAM 2: AI Projection Pipeline
+%% ==========================================
+
+graph TD
+    Start2([Demande de projection<br/>projet + horizon]) --> CheckCache{Cache Redis<br/>valide?}
+    CheckCache -- Oui --> ReturnCached[Retourner projection cachée]
+    ReturnCached --> End2([Fin])
+    CheckCache -- Non --> LoadData[Charger données projet<br/>indicateurs, actions, risques]
+
+    LoadData --> ParallelStart[/ Exécution parallèle /]
+
+    ParallelStart --> L1[LAYER 1: Trend Analysis<br/>WMA + Régression linéaire<br/>Projeter valeurs indicateurs]
+    ParallelStart --> L2[LAYER 2: Plan Simulation<br/>Construire DAG<br/>Monte Carlo ×100]
+    ParallelStart --> L3[LAYER 3: Action Plan Eval<br/>Indicateurs problématiques<br/>Couverture actions correctives]
+    ParallelStart --> L4[LAYER 4: Risk Integration<br/>Exposure scoring<br/>Facteur catégorie×horizon]
+    ParallelStart --> L5[LAYER 5: Capacity Analysis<br/>Charge vs capacité<br/>Load ratio]
+
+    L1 --> ParallelEnd[\ Synchronisation /]
+    L2 --> ParallelEnd
+    L3 --> ParallelEnd
+    L4 --> ParallelEnd
+    L5 --> ParallelEnd
+
+    ParallelEnd --> Compose[COMPOSITOR<br/>Score = 0.30×L1 + 0.25×L2<br/>+ 0.20×L3 + 0.15×L4 + 0.10×L5]
+    Compose --> ConvertMeteo2[Convertir score → Météo projetée]
+
+    ConvertMeteo2 --> CalcConfidence[Calculer CONFIANCE<br/>layerConf × coherence<br/>× horizonFactor × dataFactor]
+    CalcConfidence --> GenScenarios[Générer 3 SCÉNARIOS<br/>Nominal / Optimiste / Pessimiste]
+    GenScenarios --> GenRecos[Générer RECOMMANDATIONS<br/>Top 5 actionnables, triées par priorité]
+    GenRecos --> GenExpl[Générer EXPLICATION<br/>NLG template-based en français]
+    GenExpl --> ProjectCQD[Projeter CQD<br/>Coût / Qualité / Délai]
+
+    ProjectCQD --> BuildResult[Construire Projection complète]
+    BuildResult --> SaveDB[Sauvegarder en base]
+    SaveDB --> SetCache[Mettre en cache Redis<br/>TTL = 15 min]
+    SetCache --> End2
+
+    style L1 fill:#e1f5ff
+    style L2 fill:#fff4e1
+    style L3 fill:#f8e1ff
+    style L4 fill:#ffe1e1
+    style L5 fill:#e1ffe1
+    style Compose fill:#d4edda
+    style CalcConfidence fill:#fff4e1
+
+---
+
+%% ==========================================
+%% ACTIVITY DIAGRAM 3: CQD Calculation
+%% ==========================================
+
+graph TD
+    StartCQD([Trigger: Recalcul CQD]) --> LoadProject[Charger données projet<br/>budget, actions, indicateurs]
+
+    LoadProject --> CalcCost[COÛT<br/>écart = (consommé/prévu - 1) × 100]
+    LoadProject --> CalcQuality[QUALITÉ<br/>score = moyenne indicateurs QUALITY]
+    LoadProject --> CalcDelay[DÉLAI<br/>écart = (avancement_réel/prévu - 1) × 100]
+
+    CalcCost --> DetCostState{écart_coût}
+    DetCostState -- "≤ 5%" --> CostAligned[ALIGNED]
+    DetCostState -- "≤ 15%" --> CostTension[UNDER_TENSION]
+    DetCostState -- "> 15%" --> CostDegraded[DEGRADED]
+
+    CalcQuality --> DetQualState{score_qualité}
+    DetQualState -- "≥ 70" --> QualAligned[ALIGNED]
+    DetQualState -- "≥ 50" --> QualTension[UNDER_TENSION]
+    DetQualState -- "< 50" --> QualDegraded[DEGRADED]
+
+    CalcDelay --> DetDelayState{écart_délai}
+    DetDelayState -- "≥ -5%" --> DelayAligned[ALIGNED]
+    DetDelayState -- "≥ -15%" --> DelayTension[UNDER_TENSION]
+    DetDelayState -- "< -15%" --> DelayDegraded[DEGRADED]
+
+    CostAligned --> CalcTrends
+    CostTension --> CalcTrends
+    CostDegraded --> CalcTrends
+    QualAligned --> CalcTrends
+    QualTension --> CalcTrends
+    QualDegraded --> CalcTrends
+    DelayAligned --> CalcTrends
+    DelayTension --> CalcTrends
+    DelayDegraded --> CalcTrends
+
+    CalcTrends[Calculer TENDANCES<br/>comparer 3 dernières mesures<br/>IMPROVING / STABLE / DETERIORATING] --> SaveCQD[Sauvegarder CQDHistory]
+    SaveCQD --> InvalidateCQDCache[Invalider cache CQD]
+    InvalidateCQDCache --> EndCQD([Fin])
+
+    style CostAligned fill:#d4edda
+    style CostTension fill:#fff4e1
+    style CostDegraded fill:#f8d7da
+    style QualAligned fill:#d4edda
+    style QualTension fill:#fff4e1
+    style QualDegraded fill:#f8d7da
+    style DelayAligned fill:#d4edda
+    style DelayTension fill:#fff4e1
+    style DelayDegraded fill:#f8d7da
+
+---
+
+%% ==========================================
+%% ACTIVITY DIAGRAM 4: Action Blocking Flow
+%% ==========================================
+
+graph TD
+    StartBlock([Membre déclare blocage]) --> InputReason[Saisir raison + type de blocage<br/>RESOURCE / DEPENDENCY / TECHNICAL / DECISION]
+    InputReason --> UpdateAction[Mettre à jour action<br/>status = BLOCKED<br/>blocked_since = NOW()]
+    UpdateAction --> RecalcProgress[Recalculer avancement module<br/>et avancement projet]
+
+    RecalcProgress --> CheckCriticalPath{Action sur le<br/>chemin critique?}
+    CheckCriticalPath -- Oui --> HighAlert[Alerte HAUTE PRIORITÉ<br/>→ Directeur + Chef]
+    CheckCriticalPath -- Non --> NormalAlert[Alerte normale<br/>→ Chef de projet]
+
+    HighAlert --> CheckDuration
+    NormalAlert --> CheckDuration
+
+    CheckDuration{Bloquée depuis<br/>> 5 jours?}
+    CheckDuration -- Oui --> TriggerR20[Déclencher règle R20<br/>→ Forçage ORAGE potentiel]
+    CheckDuration -- Non --> Monitor[Surveiller quotidiennement]
+
+    TriggerR20 --> CheckCorrectiveAction{Action corrective<br/>existe?}
+    Monitor --> CheckCorrectiveAction
+    CheckCorrectiveAction -- Non --> SuggestAction[Recommander création<br/>d'action corrective]
+    CheckCorrectiveAction -- Oui --> TrackAction[Suivre l'action corrective]
+
+    SuggestAction --> RecalcMeteo[Recalculer météo]
+    TrackAction --> RecalcMeteo
+    RecalcMeteo --> EndBlock([Fin])
+
+    style HighAlert fill:#f8d7da
+    style TriggerR20 fill:#f8d7da
+    style SuggestAction fill:#fff4e1
+
+---
+
+%% ==========================================
+%% ACTIVITY DIAGRAM 5: Project Lifecycle
+%% ==========================================
+
+graph TD
+    StartLife([Nouveau Projet]) --> Create[Créer projet<br/>status = PREPARATION]
+    Create --> Config[Configurer:<br/>- Modules + pondération<br/>- Indicateurs + seuils<br/>- Équipe + rôles]
+    Config --> Validate{Validation<br/>périmètre}
+    Validate -- Refusé --> Config
+    Validate -- Validé --> InProgress[status = IN_PROGRESS<br/>Début du suivi]
+
+    InProgress --> ActiveLoop{Cycle de vie actif}
+    ActiveLoop --> SaisieIndicateurs[Saisie indicateurs<br/>selon fréquence]
+    ActiveLoop --> MAJActions[Mise à jour actions<br/>avancement / blocage]
+    ActiveLoop --> GestionRisques[Gestion risques<br/>identification / mitigation]
+    ActiveLoop --> ActionsCorrectives[Actions correctives<br/>création / suivi]
+
+    SaisieIndicateurs --> RecalcAll[Recalcul automatique:<br/>Météo + CQD + Projections]
+    MAJActions --> RecalcAll
+    GestionRisques --> RecalcAll
+    ActionsCorrectives --> RecalcAll
+
+    RecalcAll --> CheckStatus{Statut projet?}
+    CheckStatus -- Actif --> ActiveLoop
+    CheckStatus -- Pause demandée --> Paused[status = PAUSED]
+    Paused -- Reprise --> InProgress
+
+    CheckStatus -- Terminé --> Completed[status = COMPLETED<br/>Bilan final]
+    CheckStatus -- Annulé --> Cancelled[status = CANCELLED]
+
+    Completed --> Archive{Archiver?}
+    Cancelled --> Archive
+    Archive -- Oui --> Archived[status = ARCHIVED<br/>Données en lecture seule]
+    Archive -- Non --> EndLife([Fin])
+    Archived --> EndLife
+
+    style Create fill:#e1f5ff
+    style InProgress fill:#d4edda
+    style Paused fill:#fff4e1
+    style Completed fill:#d4edda
+    style Cancelled fill:#f8d7da
+    style Archived fill:#e8e8e8

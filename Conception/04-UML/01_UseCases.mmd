@@ -1,0 +1,460 @@
+%%{init: {'theme':'base'}}%%
+
+%% ==========================================
+%% USE CASE 1: AUTHENTICATION & USER MANAGEMENT
+%% ==========================================
+
+graph TB
+    subgraph "UC1: Authentication & User Management"
+        Admin["👤 Administrateur"]
+        User["👤 Utilisateur"]
+
+        UC1(["Se connecter"])
+        UC2(["Se déconnecter"])
+        UC3(["Réinitialiser mot de passe"])
+        UC4(["Gérer utilisateurs<br/>(CRUD)"])
+        UC5(["Attribuer rôles<br/>par projet"])
+        UC6(["Consulter profil"])
+        UC7(["Modifier profil"])
+        UC8(["Rafraîchir token"])
+        UC9(["Verrouiller compte<br/>(après 5 échecs)"])
+
+        Admin --> UC4
+        Admin --> UC5
+        Admin --> UC1
+        Admin --> UC2
+        Admin --> UC9
+
+        User --> UC1
+        User --> UC2
+        User --> UC3
+        User --> UC6
+        User --> UC7
+
+        UC1 -.includes.-> UC8
+        UC4 -.includes.-> UC5
+        UC1 -.extends.-> UC9
+    end
+
+    style Admin fill:#e1f5ff
+    style User fill:#fff4e1
+    style UC1 fill:#d4edda
+    style UC4 fill:#f8d7da
+
+---
+
+%% ==========================================
+%% USE CASE 2: PROJECT MANAGEMENT
+%% ==========================================
+
+graph TB
+    subgraph "UC2: Project Management"
+        Sponsor["👤 Sponsor"]
+        Director["👤 Directeur Projet"]
+        Chef["👤 Chef Projet"]
+        Observer["👤 Observateur"]
+
+        UC10(["Créer projet"])
+        UC11(["Configurer projet<br/>(type, criticité, visibilité)"])
+        UC12(["Définir modules<br/>(+ pondération)"])
+        UC13(["Sélectionner indicateurs<br/>depuis bibliothèque"])
+        UC14(["Configurer seuils<br/>par projet"])
+        UC15(["Consulter tableau de bord<br/>projet"])
+        UC16(["Exporter rapports<br/>(PDF/Excel)"])
+        UC17(["Archiver projet"])
+        UC18(["Valider périmètre"])
+        UC19(["Affecter équipe<br/>au projet"])
+
+        Director --> UC10
+        Director --> UC11
+        Director --> UC12
+        Director --> UC13
+        Director --> UC18
+        Director --> UC15
+        Director --> UC16
+        Director --> UC17
+        Director --> UC19
+
+        Chef --> UC11
+        Chef --> UC13
+        Chef --> UC14
+        Chef --> UC15
+        Chef --> UC16
+
+        Sponsor --> UC15
+        Sponsor --> UC18
+
+        Observer --> UC15
+
+        UC10 -.includes.-> UC11
+        UC11 -.includes.-> UC12
+        UC11 -.includes.-> UC13
+        UC13 -.extends.-> UC14
+        UC10 -.includes.-> UC19
+    end
+
+    style Director fill:#e1f5ff
+    style Chef fill:#fff4e1
+    style Sponsor fill:#f8e1ff
+    style Observer fill:#e8e8e8
+
+---
+
+%% ==========================================
+%% USE CASE 3: PLAN PROJET MANAGEMENT
+%% ==========================================
+
+graph TB
+    subgraph "UC3: Plan Projet Management"
+        Director2["👤 Directeur"]
+        Chef2["👤 Chef Projet"]
+        Member["👤 Membre Équipe"]
+        System["🤖 Système"]
+
+        UC20(["Créer action"])
+        UC21(["Modifier action"])
+        UC22(["Supprimer action"])
+        UC23(["Définir dépendances<br/>(FS/SS/FF/SF)"])
+        UC24(["Mettre à jour<br/>avancement (0-100%)"])
+        UC25(["Déclarer blocage<br/>(raison + type)"])
+        UC26(["Calculer avancement<br/>global pondéré"])
+        UC27(["Détecter retards<br/>(planned vs actual)"])
+        UC28(["Alerter actions<br/>bloquées > 5j"])
+        UC29(["Consulter plan projet"])
+        UC30(["Visualiser chemin<br/>critique"])
+        UC31(["Visualiser Gantt"])
+        UC32(["Valider dépendances<br/>(détection cycles)"])
+
+        Director2 --> UC20
+        Director2 --> UC21
+        Director2 --> UC22
+        Director2 --> UC23
+        Director2 --> UC29
+        Director2 --> UC30
+        Director2 --> UC31
+
+        Chef2 --> UC20
+        Chef2 --> UC21
+        Chef2 --> UC22
+        Chef2 --> UC23
+        Chef2 --> UC24
+        Chef2 --> UC25
+        Chef2 --> UC29
+        Chef2 --> UC30
+        Chef2 --> UC31
+
+        Member --> UC24
+        Member --> UC25
+        Member --> UC29
+
+        UC24 --> System
+        System --> UC26
+        System --> UC27
+        System --> UC28
+
+        UC20 -.includes.-> UC23
+        UC23 -.includes.-> UC32
+        UC25 -.triggers.-> UC28
+    end
+
+    style System fill:#ffe1e1
+
+---
+
+%% ==========================================
+%% USE CASE 4: INDICATORS & MÉTÉO
+%% ==========================================
+
+graph TB
+    subgraph "UC4: Indicators & Météo Calculation"
+        Chef3["👤 Chef Projet"]
+        Director3["👤 Directeur"]
+        Sponsor3["👤 Sponsor"]
+        System2["🤖 Système"]
+
+        UC40(["Saisir valeurs<br/>indicateurs"])
+        UC41(["Consulter indicateurs<br/>(état + historique)"])
+        UC42(["Configurer alertes<br/>par indicateur"])
+        UC43(["Calculer score<br/>indicateur (0-100)"])
+        UC44(["Pondérer indicateurs<br/>(poids × criticité)"])
+        UC45(["Agréger scores<br/>par module"])
+        UC46(["Agréger score<br/>projet global"])
+        UC47(["Convertir score<br/>→ météo"])
+        UC48(["Appliquer règles<br/>de forçage (R20-R24)"])
+        UC49(["Historiser météo"])
+        UC50(["Consulter météo<br/>+ explications"])
+        UC51(["Consulter historique<br/>météo (timeline)"])
+        UC52(["Générer explications<br/>en langage naturel"])
+
+        Chef3 --> UC40
+        Chef3 --> UC41
+        Chef3 --> UC42
+        Chef3 --> UC50
+        Chef3 --> UC51
+
+        Director3 --> UC41
+        Director3 --> UC42
+        Director3 --> UC50
+        Director3 --> UC51
+
+        Sponsor3 --> UC50
+        Sponsor3 --> UC51
+
+        UC40 --> System2
+        System2 --> UC43
+        UC43 --> UC44
+        UC44 --> UC45
+        UC45 --> UC46
+        UC46 --> UC47
+        UC47 --> UC48
+        UC48 --> UC49
+        UC49 --> UC52
+
+        UC50 -.includes.-> UC52
+    end
+
+    style System2 fill:#ffe1e1
+    style UC47 fill:#d4edda
+    style UC48 fill:#f8d7da
+
+---
+
+%% ==========================================
+%% USE CASE 5: ACTION PLAN & CORRECTIVE ACTIONS
+%% ==========================================
+
+graph TB
+    subgraph "UC5: Corrective Action Management"
+        Chef4["👤 Chef Projet"]
+        Member2["👤 Membre"]
+        System3["🤖 Système"]
+
+        UC60(["Créer action corrective"])
+        UC61(["Lier à indicateur"])
+        UC62(["Lier à action bloquée"])
+        UC63(["Lier à risque"])
+        UC64(["Affecter responsable"])
+        UC65(["Définir échéance"])
+        UC66(["Mettre à jour statut"])
+        UC67(["Consulter plan d'action"])
+        UC68(["Détecter indicateur<br/>CRITICAL sans action"])
+        UC69(["Déclencher forçage<br/>ORAGE (R23)"])
+        UC70(["Suivre efficacité<br/>(impact réel)"])
+
+        Chef4 --> UC60
+        Chef4 --> UC61
+        Chef4 --> UC62
+        Chef4 --> UC63
+        Chef4 --> UC64
+        Chef4 --> UC65
+        Chef4 --> UC66
+        Chef4 --> UC67
+        Chef4 --> UC70
+
+        Member2 --> UC66
+        Member2 --> UC67
+
+        UC60 -.includes.-> UC61
+        UC60 -.includes.-> UC64
+        UC60 -.includes.-> UC65
+        UC60 -.extends.-> UC62
+        UC60 -.extends.-> UC63
+
+        System3 --> UC68
+        UC68 -.triggers.-> UC69
+        UC66 --> UC70
+    end
+
+    style System3 fill:#ffe1e1
+    style UC69 fill:#f8d7da
+
+---
+
+%% ==========================================
+%% USE CASE 6: CQD TRACKING
+%% ==========================================
+
+graph TB
+    subgraph "UC6: Triptyque CQD"
+        Chef5["👤 Chef Projet"]
+        Director5["👤 Directeur"]
+        Sponsor5["👤 Sponsor"]
+        System4["🤖 Système"]
+
+        UC80(["Calculer écart Coût<br/>(consommé vs prévu)"])
+        UC81(["Calculer écart Qualité<br/>(score indicateurs)"])
+        UC82(["Calculer écart Délai<br/>(avancement réel vs prévu)"])
+        UC83(["Déterminer état C/Q/D<br/>(ALIGNED/TENSION/DEGRADED)"])
+        UC84(["Calculer tendances<br/>(3 dernières mesures)"])
+        UC85(["Consulter CQD<br/>(vue tryptique)"])
+        UC86(["Exporter CQD"])
+        UC87(["Historiser CQD"])
+
+        System4 --> UC80
+        System4 --> UC81
+        System4 --> UC82
+        UC80 --> UC83
+        UC81 --> UC83
+        UC82 --> UC83
+        UC83 --> UC84
+        UC84 --> UC87
+
+        Chef5 --> UC85
+        Chef5 --> UC86
+
+        Director5 --> UC85
+        Director5 --> UC86
+
+        Sponsor5 --> UC85
+    end
+
+    style System4 fill:#ffe1e1
+    style UC85 fill:#d4edda
+
+---
+
+%% ==========================================
+%% USE CASE 7: PROJECTIONS & AI
+%% ==========================================
+
+graph TB
+    subgraph "UC7: Projections & Intelligence Artificielle"
+        Chef6["👤 Chef Projet"]
+        Director6["👤 Directeur"]
+        Sponsor6["👤 Sponsor"]
+        System5["🤖 Moteur IA"]
+
+        UC90(["Analyser tendances<br/>(WMA + régression)"])
+        UC91(["Simuler plan projet<br/>(Monte Carlo ×100)"])
+        UC92(["Évaluer plan d'action<br/>(couverture + efficacité)"])
+        UC93(["Intégrer risques<br/>(exposure scoring)"])
+        UC94(["Analyser capacité<br/>(charge vs dispo)"])
+        UC95(["Composer projection<br/>(pondération 5 couches)"])
+        UC96(["Calculer confiance<br/>(HIGH/MEDIUM/LOW)"])
+        UC97(["Créer 3 scénarios<br/>(nominal/optimiste/pessimiste)"])
+        UC98(["Générer recommandations<br/>(top 5 actionnables)"])
+        UC99(["Générer explications<br/>(NLG français)"])
+        UC100(["Consulter projections"])
+        UC101(["Tracker précision<br/>(auto-évaluation)"])
+
+        System5 --> UC90
+        System5 --> UC91
+        System5 --> UC92
+        System5 --> UC93
+        System5 --> UC94
+
+        UC90 --> UC95
+        UC91 --> UC95
+        UC92 --> UC95
+        UC93 --> UC95
+        UC94 --> UC95
+
+        UC95 --> UC96
+        UC95 --> UC97
+        UC95 --> UC98
+        UC95 --> UC99
+
+        Chef6 --> UC100
+        Director6 --> UC100
+        Sponsor6 --> UC100
+
+        UC100 -.includes.-> UC99
+        System5 --> UC101
+    end
+
+    style System5 fill:#e1ffe1
+    style UC95 fill:#d4edda
+    style UC99 fill:#fff4e1
+
+---
+
+%% ==========================================
+%% USE CASE 8: RISK MANAGEMENT
+%% ==========================================
+
+graph TB
+    subgraph "UC8: Risk Management"
+        Chef7["👤 Chef Projet"]
+        Director7["👤 Directeur"]
+        System6["🤖 Système"]
+
+        UC110(["Créer risque"])
+        UC111(["Évaluer probabilité<br/>et impact (0-100)"])
+        UC112(["Calculer sévérité<br/>(P × I / 100)"])
+        UC113(["Définir plan<br/>de mitigation"])
+        UC114(["Définir plan<br/>de contingence"])
+        UC115(["Matérialiser risque"])
+        UC116(["Clôturer risque"])
+        UC117(["Consulter matrice<br/>des risques"])
+        UC118(["Lier risque à<br/>action corrective"])
+
+        Chef7 --> UC110
+        Chef7 --> UC111
+        Chef7 --> UC113
+        Chef7 --> UC114
+        Chef7 --> UC115
+        Chef7 --> UC116
+        Chef7 --> UC117
+        Chef7 --> UC118
+
+        Director7 --> UC110
+        Director7 --> UC117
+
+        UC110 -.includes.-> UC111
+        UC111 --> System6
+        System6 --> UC112
+        UC115 -.triggers.-> UC118
+    end
+
+---
+
+%% ==========================================
+%% USE CASE 9: DASHBOARD & REPORTING
+%% ==========================================
+
+graph TB
+    subgraph "UC9: Dashboard & Reporting"
+        All["👤 Tous utilisateurs"]
+        Chef8["👤 Chef Projet"]
+        Director8["👤 Directeur"]
+        Sponsor8["👤 Sponsor"]
+
+        UC120(["Consulter tableau<br/>de bord global"])
+        UC121(["Filtrer par projet"])
+        UC122(["Filtrer par période"])
+        UC123(["Consulter vue<br/>d'ensemble multi-projets"])
+        UC124(["Consulter détails<br/>d'un projet"])
+        UC125(["Exporter PDF"])
+        UC126(["Exporter Excel"])
+        UC127(["Planifier export<br/>automatique"])
+        UC128(["Comparer projets<br/>(side-by-side)"])
+        UC129(["Consulter KPIs<br/>globaux"])
+
+        All --> UC120
+        All --> UC121
+        All --> UC122
+
+        Chef8 --> UC123
+        Chef8 --> UC124
+        Chef8 --> UC125
+        Chef8 --> UC126
+
+        Director8 --> UC123
+        Director8 --> UC124
+        Director8 --> UC125
+        Director8 --> UC126
+        Director8 --> UC127
+        Director8 --> UC128
+        Director8 --> UC129
+
+        Sponsor8 --> UC123
+        Sponsor8 --> UC128
+        Sponsor8 --> UC129
+
+        UC120 -.includes.-> UC121
+        UC120 -.includes.-> UC122
+        UC125 -.alternative.-> UC126
+    end
+
+    style All fill:#e8e8e8
+    style UC120 fill:#d4edda
